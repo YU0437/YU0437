@@ -410,6 +410,12 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #a8a8a8;
         }
+
+        .editing-effect {
+            border: 2px solid #0d6efd;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+            transition: all 0.3s ease;
+        }
 	</style>
 </head>
 <body>
@@ -721,7 +727,6 @@
 				</div>
 			</div>
 
-			<!-- 替换原有的JSON编辑器卡片 -->
 			<div class="card mt-4">
 				<div class="card-header d-flex justify-content-between align-items-center">
 					<div>
@@ -736,8 +741,13 @@
 					<div class="card-body">
 						<ul class="nav nav-tabs" id="jsonTabs" role="tablist">
 							<li class="nav-item" role="presentation">
-								<button class="nav-link active" id="preview-tab" data-bs-toggle="tab"
-								        data-bs-target="#preview" type="button" role="tab">预览
+								<button class="nav-link active" id="current-item-tab" data-bs-toggle="tab"
+								        data-bs-target="#current-item" type="button" role="tab">当前物品
+								</button>
+							</li>
+							<li class="nav-item" role="presentation">
+								<button class="nav-link" id="preview-tab" data-bs-toggle="tab"
+								        data-bs-target="#preview" type="button" role="tab">全部物品
 								</button>
 							</li>
 							<li class="nav-item" role="presentation">
@@ -752,8 +762,22 @@
 							</li>
 						</ul>
 						<div class="tab-content" id="jsonTabContent">
-							<div class="tab-pane fade show active" id="preview" role="tabpanel">
-                    <textarea id="jsonOutput" class="json-editor mb-3" placeholder="请添加或选择物品..."
+							<div class="tab-pane fade show active" id="current-item" role="tabpanel">
+                    <textarea id="currentItemJson" class="json-editor mb-3" placeholder="当前物品JSON..."
+                              readonly></textarea>
+								<div class="d-flex justify-content-between">
+									<div>
+										<button class="btn btn-primary me-2" id="btnCopyCurrentJson">
+											<i class="bi bi-clipboard me-1"></i>复制JSON
+										</button>
+										<button class="btn btn-secondary" id="btnDownloadCurrentJson">
+											<i class="bi bi-download me-1"></i>下载JSON
+										</button>
+									</div>
+								</div>
+							</div>
+							<div class="tab-pane fade" id="preview" role="tabpanel">
+                    <textarea id="jsonOutput" class="json-editor mb-3" placeholder="所有物品JSON..."
                               readonly></textarea>
 								<div class="d-flex justify-content-between">
 									<div>
@@ -770,8 +794,8 @@
 								</div>
 							</div>
 							<div class="tab-pane fade" id="editor" role="tabpanel">
-								<textarea id="jsonEditor" class="json-editor mb-3"
-								          placeholder="在此编辑JSON..."></textarea>
+                    <textarea id="jsonEditor" class="json-editor mb-3"
+                              placeholder="在此编辑JSON..."></textarea>
 								<div class="d-flex justify-content-between">
 									<button class="btn btn-primary" id="btnFormatJson">
 										<i class="bi bi-align-left me-1"></i>格式化
@@ -882,16 +906,15 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-	// =============================================
-	// 全局变量和配置
-	// =============================================
-
 	// 游戏物品数据
 	let items = [];
 	let currentEffectIndex = -1;
 	let currentItemIndex = -1;
 	let historyStack = [];
 	let historyPointer = -1;
+	// 在全局变量部分添加
+	let isEditingEffect = false;
+	let currentEditingEffectIndex = -1;
 
 	// 本地存储键
 	const STORAGE_KEY = 'advanced_game_items_designer_data';
@@ -1064,13 +1087,50 @@
 			value: 1
 		},
 		bulletBehaviors: {
-			type: 'select',
+			type: 'nested',
 			label: '子弹行为',
 			multiple: true,
-			showSelectAll: true,
-			options: [
-				{value: 'Freezing', text: '子弹附带中毒'},
-				{value: 'Burn', text: '子弹附带燃烧效果'}
+			fields: [
+				{
+					type: 'select',
+					label: '行为类型',
+					param: 'type', // 明确指定参数名
+					options: [
+						{value: 'Freezing', text: '冰冻'},
+						{value: 'Burn', text: '燃烧'},
+						{value: 'Poison', text: '中毒'},
+						{value: 'Bleed', text: '流血'}
+					]
+				},
+				{
+					type: 'text',
+					label: 'id',
+					value: 1,
+					param: 'effectId',
+					placeholder: '输入唯一效果ID',
+				},
+				{
+					type: 'number',
+					label: '最大层数',
+					param: 'maxStacks',
+					min: 1,
+					max: 10,
+					value: 1
+				},
+				{
+					type: 'number',
+					label: '每层效果值',
+					param: 'valuePerStack',
+					step: 0.1,
+					value: 1
+				},
+				{
+					type: 'number',
+					label: '持续时间(秒)',
+					param: 'durationPerStack',
+					step: 0.1,
+					value: 1
+				}
 			]
 		},
 		specialEventTypes: {
@@ -1118,6 +1178,7 @@
 					optional: ['bulletCounts', 'bulletPenetrate']
 				},
 				HitTemporary: {required: ['addStat', 'statRatio']},
+				KillPickMaterial: {required: ['triggerChance']},
 				KillAddStat: {required: ['addStat', 'statRatio', 'triggerChance']},
 				KillEnemyToDamage: {
 					required: ['baseDamage', 'addStat', 'statRatio', 'triggerChance'],
@@ -1139,8 +1200,8 @@
 				FreeFlushCount: {required: ['xSecondCount']},
 				BulletLaunch: {required: ['xSecondCount']},
 				SecondPackedScene: {
-					required: ['xSecond', 'addStat', 'statRatio', 'triggerChance', 'bulletType'],
-					optional: ['bulletCounts', 'bulletType']
+					required: ['xSecond', 'addStat', 'statRatio', 'triggerChance', 'bulletCounts'],
+					optional: ['bulletBehaviors']
 				},
 				SecondTmpChange: {required: ['addStat', 'statRatio', 'triggerChance']},
 				StandTmpChange: {required: ['addStat', 'statRatio']},
@@ -1169,7 +1230,8 @@
 		'OnKill': [
 			{value: 'KillAddStat', text: '永久增加自身属性'},
 			{value: 'KillEnemyToDamage', text: '对其他敌人造成伤害'},
-			{value: 'KillPackedScene', text: '生成子弹'}
+			{value: 'KillPackedScene', text: '生成子弹'},
+			{value: 'KillPickMaterial', text: '拾取掉落物'}
 		],
 		'OnPickupMaterial': [
 			{value: 'PickAddStat', text: '永久增加属性'},
@@ -1454,10 +1516,6 @@
 		});
 	}
 
-	// =============================================
-	// 核心功能函数
-	// =============================================
-
 	// 从本地存储加载数据
 	function loadFromLocalStorage()
 	{
@@ -1588,7 +1646,6 @@
 		renderEffects(item.effects);
 		renderItemList(); // 更新列表中的活动项样式
 		updateJsonPreview();
-		updateEffectPreview();
 	}
 
 	// 自动保存物品（表单字段变化时调用）
@@ -1613,24 +1670,45 @@
 		saveToHistory('修改物品属性');
 		renderItemList();
 		updateJsonPreview();
-		updateEffectPreview();
 	}
 
-	// 保存物品
 	function saveItem(e)
 	{
-		if(e) e.preventDefault();
+		if(e)
+		{
+			e.preventDefault(); // 阻止表单默认提交行为
+		}
 
 		const index = parseInt(document.getElementById('itemIndex').value);
-		if(index === -1) return;
+		if(index === -1)
+		{
+			showToast('请先选择要保存的物品', 'warning');
+			return;
+		}
 
 		// 验证表单
 		if(!validateItemForm())
 		{
+			showToast('请正确填写所有必填字段', 'danger');
 			return;
 		}
-
-		autoSaveItem();
+		// 保存数据
+		items[index] = {
+			...items[index],
+			id: document.getElementById('itemId').value,
+			name: document.getElementById('itemName').value,
+			price: parseFloat(document.getElementById('itemPrice').value),
+			icon: document.getElementById('itemIcon').value,
+			type: document.getElementById('itemType').value,
+			rarity: document.getElementById('itemRarity').value,
+			weight: parseInt(document.getElementById('itemWeight').value),
+			stackable: document.getElementById('itemStackable').value === 'true',
+			description: document.getElementById('itemDescription').value
+		};
+		saveToHistory('修改物品属性');
+		saveToLocalStorage(); // 确保保存到本地存储
+		renderItemList();
+		updateJsonPreview();
 		showToast('物品保存成功', 'success');
 	}
 
@@ -1638,8 +1716,6 @@
 	function validateItemForm()
 	{
 		let isValid = true;
-		const form = document.getElementById('itemForm');
-
 		// 验证物品ID
 		const itemId = document.getElementById('itemId');
 		if(!itemId.value.trim())
@@ -1840,10 +1916,6 @@
 		renderItemList();
 	}
 
-	// =============================================
-	// 效果管理函数
-	// =============================================
-
 	// 显示效果表单
 	function showEffectForm()
 	{
@@ -1928,78 +2000,6 @@
 		});
 	}
 
-	// 编辑效果
-	function editEffect(index)
-	{
-		const itemIndex = document.getElementById('itemIndex').value;
-		if(itemIndex === -1) return;
-
-		const effect = items[itemIndex].effects[index];
-		currentEffectIndex = index;
-
-		showEffectForm();
-
-		// 稍等片刻让表单渲染完成
-		setTimeout(() =>
-		{
-			if(effect.stat && !effect.effect)
-			{
-				// 属性修改效果
-				document.querySelector('.effect-main-type').value = 'stat';
-				document.querySelector('.effect-main-type').dispatchEvent(new Event('change'));
-
-				// 填充值
-				setTimeout(() =>
-				{
-					if(effect.stat) document.querySelector('[data-param="属性名称"]').value = effect.stat;
-					if(effect.value) document.querySelector('[data-param="数值"]').value = effect.value;
-					if(effect.operation) document.querySelector('[data-param="操作类型"]').value = effect.operation;
-				}, 50);
-			}
-			else if(effect.effect === 'Triggered')
-			{
-				// 触发效果
-				document.querySelector('.effect-main-type').value = 'triggered';
-				document.querySelector('.effect-main-type').dispatchEvent(new Event('change'));
-
-				// 填充值
-				setTimeout(() =>
-				{
-					if(effect.specialEventTypes)
-					{
-						document.querySelector('.effect-event-type').value = effect.specialEventTypes;
-						document.querySelector('.effect-event-type').dispatchEvent(new Event('change'));
-
-						setTimeout(() =>
-						{
-							if(effect.type)
-							{
-								document.querySelector('.effect-type').value = effect.type;
-								document.querySelector('.effect-type').dispatchEvent(new Event('change'));
-
-								setTimeout(() =>
-								{
-									// 填充所有参数
-									Object.keys(effect).forEach(key =>
-									{
-										if(key !== 'effect' && key !== 'specialEventTypes' && key !== 'type')
-										{
-											const field = document.querySelector(`[data-param="${key.toLowerCase()}"]`);
-											if(field)
-											{
-												field.value = effect[key];
-											}
-										}
-									});
-								}, 50);
-							}
-						}, 50);
-					}
-				}, 50);
-			}
-		}, 100);
-	}
-
 	// 删除效果
 	function deleteEffect(index)
 	{
@@ -2011,7 +2011,6 @@
 		saveToHistory(`删除效果: ${effect.effect || effect.stat}`);
 		renderEffects(items[itemIndex].effects);
 		updateJsonPreview();
-		updateEffectPreview();
 		saveToLocalStorage();
 
 		showToast('效果已删除', 'warning');
@@ -2114,6 +2113,7 @@
         ${effect.type === 'WaveFreeFlush' ? `每回合获得一次免费刷新` : ''}
         ${effect.type === 'BulletLaunch' ? `子弹弹射+${effect.xSecond}` : ''}
         ${effect.type === 'FreeFlushCount' ? `获得${effect.xSecond}次刷新` : ''}
+        ${effect.type === 'KillPickMaterial' ? `吸收掉落物` : ''}
 
         <!-- 子弹伤害详情  如果效果存在生成子弹,择生成子弹描述-->
         ${effect.bulletType ?
@@ -2310,89 +2310,23 @@
 				input.appendChild(option);
 			});
 		}
-		else if(config.type === 'multiselect' || (config.type === 'select' && config.multiple && config.showSelectAll))
+		else if(config.type === 'nested')
 		{
-			// Create container for multi-select with select all functionality
-			const multiSelectContainer = document.createElement('div');
-			multiSelectContainer.className = 'multiselect-container';
+			const container = document.createElement('div');
+			container.className = 'nested-field-container';
 
-			// Create the select element
-			input = document.createElement('select');
-			input.className = 'form-control';
-			input.multiple = true;
-			input.size = config.size || 4;
-			input.dataset.param = config.label;
+			// 添加按钮
+			const addButton = document.createElement('button');
+			addButton.type = 'button';
+			addButton.className = 'btn btn-sm btn-outline-primary mb-2';
+			addButton.innerHTML = '<i class="bi bi-plus"></i> 添加行为';
+			addButton.addEventListener('click', () => addNestedField(container, config));
 
-			// Add options
-			config.options.forEach(opt =>
-			{
-				const option = document.createElement('option');
-				option.value = opt.value;
-				option.textContent = opt.text;
-				// Handle pre-selected values
-				if(config.value)
-				{
-					if(Array.isArray(config.value) && config.value.includes(opt.value))
-					{
-						option.selected = true;
-					}
-					else if(config.value === opt.value)
-					{
-						option.selected = true;
-					}
-				}
-				input.appendChild(option);
-			});
-
-			// Add select all/deselect all buttons if showSelectAll is true
-			if(config.showSelectAll)
-			{
-				const buttonGroup = document.createElement('div');
-				buttonGroup.className = 'mt-2';
-
-				const selectAllBtn = document.createElement('button');
-				selectAllBtn.type = 'button';
-				selectAllBtn.className = 'btn btn-sm btn-outline-secondary me-2';
-				selectAllBtn.textContent = '全选';
-				selectAllBtn.addEventListener('click', () =>
-				{
-					Array.from(input.options).forEach(option =>
-					{
-						option.selected = true;
-					});
-				});
-
-				const deselectAllBtn = document.createElement('button');
-				deselectAllBtn.type = 'button';
-				deselectAllBtn.className = 'btn btn-sm btn-outline-secondary';
-				deselectAllBtn.textContent = '取消全选';
-				deselectAllBtn.addEventListener('click', () =>
-				{
-					Array.from(input.options).forEach(option =>
-					{
-						option.selected = false;
-					});
-				});
-
-				buttonGroup.appendChild(selectAllBtn);
-				buttonGroup.appendChild(deselectAllBtn);
-				multiSelectContainer.appendChild(input);
-				multiSelectContainer.appendChild(buttonGroup);
-
-				div.appendChild(label);
-				div.appendChild(multiSelectContainer);
-				return div;
-			}
-
-			// If not showing select all buttons, just add the multi-select
-			multiSelectContainer.appendChild(input);
-			div.appendChild(label);
-			div.appendChild(multiSelectContainer);
-			return div;
+			container.appendChild(addButton);
+			return container;
 		}
 		else
 		{
-			// Regular input field
 			input = document.createElement('input');
 			input.type = config.type || 'text';
 			input.className = 'form-control';
@@ -2576,6 +2510,72 @@
 					}
 				}
 			});
+
+			// 处理嵌套字段 - 子弹行为
+			const bulletBehaviors = [];
+			form.querySelectorAll('.nested-field-group').forEach(group =>
+			{
+				const behavior = {};
+
+				// 遍历组内所有输入字段
+				group.querySelectorAll('input, select').forEach(field =>
+				{
+					const param = field.dataset.param;
+					if(!param) return;
+
+					// 映射中文参数名到英文key
+					const paramMap = {
+						"行为类型": "type",
+						"id": "effectId",
+						"最大层数": "maxStacks",
+						"每层效果值": "valuePerStack",
+						"持续时间(秒)": "durationPerStack"
+					};
+
+					const key = paramMap[param] || param;
+
+					// 处理不同类型字段的值
+					if(field.type === 'checkbox')
+					{
+						behavior[key] = field.checked;
+					}
+					else if(field.type === 'number')
+					{
+						behavior[key] = parseFloat(field.value) || 0;
+					}
+					else if(field.multiple)
+					{
+						// 处理多选字段
+						behavior[key] = Array.from(field.selectedOptions).map(opt => opt.value);
+					}
+					else
+					{
+						behavior[key] = field.value;
+					}
+				});
+
+				if(Object.keys(behavior).length > 0)
+				{
+					bulletBehaviors.push(behavior);
+				}
+			});
+// 删除可能存在的重复字段 - 但要保留子弹行为相关字段
+			const redundantFields = ["行为类型", "id", "最大层数", "每层效果值", "持续时间(秒)"];
+			redundantFields.forEach(field =>
+			{
+				// 只有当这些字段不是子弹行为的一部分时才删除
+				if(!effect.bulletBehaviors || !effect.bulletBehaviors.some(b => b[field]))
+				{
+					delete effect[field];
+				}
+			});
+
+			// 保存子弹行为数据
+			if(bulletBehaviors.length > 0)
+			{
+				effect.bulletBehaviors = bulletBehaviors;
+			}
+
 		}
 
 		// 保存效果
@@ -2593,7 +2593,6 @@
 		form.remove();
 		renderEffects(items[itemIndex].effects);
 		updateJsonPreview();
-		updateEffectPreview();
 		saveToLocalStorage();
 
 		showToast('效果已保存', 'success');
@@ -2612,15 +2611,10 @@
 		saveToHistory(`应用模板: ${templateName}`);
 		renderEffects(items[itemIndex].effects);
 		updateJsonPreview();
-		updateEffectPreview();
 		saveToLocalStorage();
 
 		showToast('效果模板已应用', 'success');
 	}
-
-	// =============================================
-	// JSON 和导入/导出功能
-	// =============================================
 
 	// 更新JSON预览
 	function updateJsonPreview()
@@ -2827,10 +2821,6 @@
 		showToast('更改已撤销', 'info');
 	}
 
-	// =============================================
-	// 其他辅助功能
-	// =============================================
-
 	// 保存历史记录
 	function saveToHistory(action)
 	{
@@ -2897,4 +2887,283 @@
 			}, 300);
 		});
 	}
+
+	// 修改addNestedField函数以支持预设值
+	function addNestedField(container, config, presetValues = {})
+	{
+		const fieldGroup = document.createElement('div');
+		fieldGroup.className = 'nested-field-group mb-3 p-3 border rounded';
+
+		// 添加删除按钮
+		const deleteButton = document.createElement('button');
+		deleteButton.type = 'button';
+		deleteButton.className = 'btn btn-sm btn-outline-danger float-end';
+		deleteButton.innerHTML = '<i class="bi bi-trash"></i>';
+		deleteButton.addEventListener('click', () => fieldGroup.remove());
+
+		fieldGroup.appendChild(deleteButton);
+
+		// 添加字段并设置预设值
+		config.fields.forEach(fieldConfig =>
+		{
+			const fieldDiv = createFieldElement({
+				...fieldConfig,
+				value: presetValues[fieldConfig.label.replace(/\s+/g, '').toLowerCase()]
+			});
+			fieldGroup.appendChild(fieldDiv);
+		});
+
+		container.insertBefore(fieldGroup, container.lastElementChild);
+	}
+
+	function editEffect(index)
+	{
+		const itemIndex = parseInt(document.getElementById('itemIndex').value);
+		if(itemIndex === -1) return;
+		// 如果点击的是当前正在编辑的效果，则取消编辑
+		if(isEditingEffect && currentEditingEffectIndex === index)
+		{
+			cancelEffectEditing();
+			return;
+		}
+
+		const effect = items[itemIndex].effects[index];
+		currentEffectIndex = index;
+		currentEditingEffectIndex = index;
+		isEditingEffect = true;
+
+		showEffectForm();
+		// 高亮当前正在编辑的效果
+		highlightEditingEffect(index);
+		// 使用更可靠的延迟确保DOM加载完成
+		const tryFillForm = (attempt = 0) =>
+		{
+			const form = document.getElementById('effectForm');
+			if(!form && attempt < 5)
+			{
+				setTimeout(() => tryFillForm(attempt + 1), 100);
+				return;
+			}
+			if(!form) return;
+
+			// 1. 设置主效果类型
+			if(effect.effect === 'Triggered')
+			{
+				form.querySelector('.effect-main-type').value = 'triggered';
+				const event = new Event('change');
+				form.querySelector('.effect-main-type').dispatchEvent(event);
+
+				// 2. 设置事件类型
+				setTimeout(() =>
+				{
+					if(effect.specialEventTypes)
+					{
+						form.querySelector('.effect-event-type').value = effect.specialEventTypes;
+						form.querySelector('.effect-event-type').dispatchEvent(new Event('change'));
+
+						// 3. 设置效果类型
+						setTimeout(() =>
+						{
+							if(effect.type)
+							{
+								form.querySelector('.effect-type').value = effect.type;
+								form.querySelector('.effect-type').dispatchEvent(new Event('change'));
+
+								// 4. 设置其他参数
+								setTimeout(() =>
+								{
+									Object.keys(effect).forEach(key =>
+									{
+										if(!['effect', 'specialEventTypes', 'type', 'bulletBehaviors'].includes(key))
+										{
+											const input = form.querySelector(`[data-param="${key}"]`);
+											if(input)
+											{
+												if(input.type === 'checkbox')
+												{
+													input.checked = effect[key];
+												}
+												else
+												{
+													input.value = effect[key];
+												}
+											}
+										}
+									});
+
+									// 5. 加载子弹行为（关键修改）
+									if(effect.bulletBehaviors?.length > 0)
+									{
+										const container = form.querySelector('.nested-field-container');
+										if(container)
+										{
+											// 先清空现有字段
+											container.querySelectorAll('.nested-field-group').forEach(g => g.remove());
+
+											// 添加子弹行为数据
+											effect.bulletBehaviors.forEach(behavior =>
+											{
+												addNestedFieldWithData(container, behavior);
+											});
+										}
+									}
+								}, 50);
+							}
+						}, 50);
+					}
+				}, 50);
+			}
+		};
+
+		tryFillForm();
+	}
+
+	function addNestedFieldWithData(container, behaviorData)
+	{
+		const config = effectFieldsPool.bulletBehaviors;
+		const fieldGroup = document.createElement('div');
+		fieldGroup.className = 'nested-field-group mb-3 p-3 border rounded';
+
+		// 删除按钮
+		const deleteButton = document.createElement('button');
+		deleteButton.type = 'button';
+		deleteButton.className = 'btn btn-sm btn-outline-danger float-end';
+		deleteButton.innerHTML = '<i class="bi bi-trash"></i>';
+		deleteButton.addEventListener('click', () => fieldGroup.remove());
+		fieldGroup.appendChild(deleteButton);
+
+		// 添加字段并填充数据
+		config.fields.forEach(fieldConfig =>
+		{
+			const fieldDiv = document.createElement('div');
+			fieldDiv.className = 'mb-2';
+
+			const label = document.createElement('label');
+			label.className = 'form-label small';
+			label.textContent = fieldConfig.label;
+			fieldDiv.appendChild(label);
+
+			let input;
+			if(fieldConfig.type === 'select')
+			{
+				input = document.createElement('select');
+				input.className = 'form-control form-control-sm';
+				input.dataset.param = fieldConfig.label; // 使用label作为param
+
+				// 添加选项
+				fieldConfig.options.forEach(opt =>
+				{
+					const option = document.createElement('option');
+					option.value = opt.value;
+					option.textContent = opt.text;
+					input.appendChild(option);
+				});
+
+				// 设置选中值
+				const valueKey = fieldConfig.param || fieldConfig.label.replace(/\s+/g, '').toLowerCase();
+				if(behaviorData[valueKey] !== undefined)
+				{
+					input.value = behaviorData[valueKey];
+				}
+			}
+			else
+			{
+				input = document.createElement('input');
+				input.type = fieldConfig.type || 'text';
+				input.className = 'form-control form-control-sm';
+				input.dataset.param = fieldConfig.label; // 使用label作为param
+
+				// 设置值
+				const valueKey = fieldConfig.param || fieldConfig.label.replace(/\s+/g, '').toLowerCase();
+				if(behaviorData[valueKey] !== undefined)
+				{
+					input.value = behaviorData[valueKey];
+				}
+
+				if(fieldConfig.placeholder)
+				{
+					input.placeholder = fieldConfig.placeholder;
+				}
+
+				// 数字字段的特殊属性
+				if(fieldConfig.type === 'number')
+				{
+					if(fieldConfig.min !== undefined) input.min = fieldConfig.min;
+					if(fieldConfig.max !== undefined) input.max = fieldConfig.max;
+					if(fieldConfig.step !== undefined) input.step = fieldConfig.step;
+				}
+			}
+
+			fieldDiv.appendChild(input);
+			fieldGroup.appendChild(fieldDiv);
+		});
+
+		container.insertBefore(fieldGroup, container.lastElementChild);
+	}
+
+	function cancelEffectEditing()
+	{
+		const form = document.getElementById('effectForm');
+		if(form)
+		{
+			form.remove();
+		}
+		isEditingEffect = false;
+		currentEditingEffectIndex = -1;
+
+		// 移除高亮效果
+		const effectsContainer = document.getElementById('effectsContainer');
+		effectsContainer.querySelectorAll('.editing-effect').forEach(el =>
+		{
+			el.classList.remove('editing-effect');
+		});
+
+		showToast('已取消编辑', 'info');
+	}
+
+	function highlightEditingEffect(index)
+	{
+		// 先移除所有高亮
+		const effectsContainer = document.getElementById('effectsContainer');
+		effectsContainer.querySelectorAll('.editing-effect').forEach(el =>
+		{
+			el.classList.remove('editing-effect');
+		});
+
+		// 高亮当前编辑的效果
+		const effectCards = effectsContainer.querySelectorAll('.effect-card');
+		if(index >= 0 && index < effectCards.length)
+		{
+			effectCards[index].classList.add('editing-effect');
+		}
+	}
+
+	// 复制当前物品JSON
+	document.getElementById('btnCopyCurrentJson').addEventListener('click', function ()
+	{
+		const currentItemJson = document.getElementById('currentItemJson');
+		currentItemJson.select();
+		document.execCommand('copy');
+		window.getSelection().removeAllRanges();
+		showToast('当前物品JSON已复制到剪贴板', 'success');
+	});
+
+	// 下载当前物品JSON
+	document.getElementById('btnDownloadCurrentJson').addEventListener('click', function ()
+	{
+		const currentItemJson = document.getElementById('currentItemJson');
+		const blob = new Blob([currentItemJson.value], {type: 'application/json'});
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+
+		// 使用当前物品ID作为文件名，如果没有ID则使用默认名称
+		const currentItem = items[currentItemIndex];
+		a.download = currentItem && currentItem.id ? `${currentItem.id}.json` : 'current_item.json';
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+		showToast('当前物品JSON已下载', 'success');
+	});
 </script>
