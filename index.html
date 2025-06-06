@@ -416,10 +416,213 @@
             box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
             transition: all 0.3s ease;
         }
+
+        /* 在现有样式之后添加以下内容 */
+
+        /* 手机端适配 */
+        @media (max-width: 768px) {
+            /* 整体布局调整 */
+            .container {
+                padding: 10px;
+            }
+
+            /* 头部调整 */
+            .header {
+                padding: 15px;
+                margin-bottom: 15px;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .header .subtitle {
+                font-size: 0.9rem;
+            }
+
+            /* 卡片调整 */
+            .card {
+                margin-bottom: 15px;
+            }
+
+            .card-header {
+                padding: 10px 15px;
+                font-size: 0.95rem;
+            }
+
+            .card-body {
+                padding: 15px;
+            }
+
+            /* 表单元素调整 */
+            .form-control, .form-select, .btn {
+                padding: 12px 15px;
+                font-size: 1rem;
+            }
+
+            /* 物品列表调整 */
+            .item-list-container {
+                height: 300px;
+                margin-bottom: 15px;
+            }
+
+            .item-list-item {
+                padding: 10px 12px;
+            }
+
+            /* 效果卡片调整 */
+            .effect-card {
+                padding: 12px;
+            }
+
+            /* 按钮组调整 */
+            .btn-group .btn {
+                padding: 8px 12px;
+            }
+
+            /* JSON编辑器调整 */
+            .json-editor {
+                min-height: 200px;
+                font-size: 0.9rem;
+                padding: 10px;
+            }
+
+            /* 标签页调整 */
+            .nav-tabs .nav-link {
+                padding: 8px 12px;
+                font-size: 0.9rem;
+            }
+
+            /* 隐藏部分非必要元素 */
+            .item-meta {
+                display: none;
+            }
+
+            /* 调整模态框 */
+            .modal-dialog {
+                margin: 0.5rem;
+            }
+
+            /* 调整表格显示 */
+            .table-responsive {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            /* 效果模板库调整 */
+            #effectTemplatesCollapse .card {
+                margin-bottom: 10px;
+            }
+
+            /* 调整表单布局 */
+            .row.mb-3 > [class*="col-"] {
+                margin-bottom: 10px;
+            }
+
+            /* 调整按钮间距 */
+            .d-flex.justify-content-between > .btn {
+                margin-bottom: 8px;
+            }
+
+            /* 调整效果表单 */
+            #effectDynamicFields .mb-3 {
+                margin-bottom: 10px !important;
+            }
+
+            /* 调整嵌套字段 */
+            .nested-field-group {
+                padding: 8px;
+            }
+        }
+
+        /* 非常小的设备 (如iPhone 5/SE) */
+        @media (max-width: 320px) {
+            .container {
+                padding: 5px;
+            }
+
+            .header {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 1.3rem;
+            }
+
+            .form-control, .form-select, .btn {
+                padding: 10px 12px;
+                font-size: 0.9rem;
+            }
+
+            .card-header {
+                padding: 8px 10px;
+            }
+
+            .card-body {
+                padding: 10px;
+            }
+
+            .btn-sm {
+                padding: 5px 8px;
+                font-size: 0.8rem;
+            }
+        }
+
+        /* 横向模式优化 */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .item-list-container {
+                height: 200px;
+            }
+
+            .json-editor {
+                min-height: 150px;
+            }
+        }
+
+        /* 触摸优化 */
+        @media (hover: none) {
+            /* 增大触摸目标尺寸 */
+            .btn, .form-control, .form-select, .nav-tabs .nav-link {
+                min-height: 44px; /* Apple推荐的最小触摸目标尺寸 */
+            }
+
+            /* 效果卡片操作按钮始终显示 */
+            .effect-card .effect-actions {
+                opacity: 1 !important;
+            }
+
+            /* 禁用悬停效果 */
+            .card:hover {
+                transform: none;
+                box-shadow: none;
+            }
+
+            .item-list-item:hover {
+                background-color: inherit;
+                border-left-color: transparent;
+            }
+        }
 	</style>
 </head>
 <body>
+<button id="mobileMenuBtn" class="d-lg-none btn btn-primary fixed-top m-3" style="z-index: 1050;">
+	<i class="bi bi-list"></i> 菜单
+</button>
 
+<!-- 在容器div之后添加移动底部导航 -->
+<div class="d-lg-none fixed-bottom bg-white p-2 shadow-lg" style="z-index: 1040;">
+	<div class="d-flex justify-content-around">
+		<button class="btn btn-outline-primary" id="mobileAddItemBtn">
+			<i class="bi bi-plus-lg"></i> 添加
+		</button>
+		<button class="btn btn-outline-success" id="mobileSaveBtn">
+			<i class="bi bi-save"></i> 保存
+		</button>
+		<button class="btn btn-outline-info" id="mobileJsonBtn">
+			<i class="bi bi-code-slash"></i> JSON
+		</button>
+	</div>
+</div>
 <div class="container py-4">
 	<div class="row">
 		<!-- 左侧物品列表 -->
@@ -1368,6 +1571,44 @@
 
 		// 更新物品计数
 		updateItemCount();
+
+		// 添加触摸设备检测
+		function isTouchDevice()
+		{
+			return 'ontouchstart' in window || navigator.maxTouchPoints;
+		}
+
+		if(isTouchDevice())
+		{
+			// 为触摸设备添加特定类
+			document.body.classList.add('is-touch-device');
+
+			// 调整物品列表项点击区域
+			document.querySelectorAll('.item-list-item').forEach(item =>
+			{
+				item.style.padding = '15px';
+				item.style.minHeight = '60px';
+			});
+
+			// 增大效果操作按钮尺寸
+			document.querySelectorAll('.effect-actions .btn').forEach(btn =>
+			{
+				btn.style.padding = '10px';
+				btn.style.fontSize = '1.1rem';
+			});
+		}
+
+		// 防止移动设备上的双击缩放干扰点击事件
+		let lastTouchTime = 0;
+		document.addEventListener('touchend', function (event)
+		{
+			const now = Date.now();
+			if(now - lastTouchTime < 300)
+			{
+				event.preventDefault();
+			}
+			lastTouchTime = now;
+		}, false);
 	});
 
 	// 初始化工具提示
@@ -3207,5 +3448,36 @@
 		document.body.removeChild(a);
 		URL.revokeObjectURL(url);
 		showToast('当前物品JSON已下载', 'success');
+	});
+	// 移动菜单功能
+	document.getElementById('mobileMenuBtn').addEventListener('click', function ()
+	{
+		// 实现简单的侧边菜单或下拉菜单
+		alert('移动菜单功能 - 可以扩展为实际的下拉菜单或侧边栏');
+	});
+
+	// 移动底部导航按钮功能
+	document.getElementById('mobileAddItemBtn').addEventListener('click', function ()
+	{
+		addNewItem();
+		// 滚动到顶部
+		window.scrollTo(0, 0);
+	});
+
+	document.getElementById('mobileSaveBtn').addEventListener('click', function ()
+	{
+		saveItem();
+	});
+
+	document.getElementById('mobileJsonBtn').addEventListener('click', function ()
+	{
+		// 展开JSON编辑器
+		const collapse = new bootstrap.Collapse(document.getElementById('jsonEditorCollapse'), {
+			toggle: true
+		});
+		// 滚动到JSON编辑器
+		document.getElementById('jsonEditorCollapse').scrollIntoView({
+			behavior: 'smooth'
+		});
 	});
 </script>
