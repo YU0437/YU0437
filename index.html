@@ -906,6 +906,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+	// =============================================
+	// 全局变量和配置
+	// =============================================
+
 	// 游戏物品数据
 	let items = [];
 	let currentEffectIndex = -1;
@@ -1515,6 +1519,10 @@
 			}
 		});
 	}
+
+	// =============================================
+	// 核心功能函数
+	// =============================================
 
 	// 从本地存储加载数据
 	function loadFromLocalStorage()
@@ -3135,6 +3143,40 @@
 		if(index >= 0 && index < effectCards.length)
 		{
 			effectCards[index].classList.add('editing-effect');
+		}
+	}
+
+	// 更新JSON预览函数
+	function updateJsonPreview()
+	{
+		const jsonOutput = document.getElementById('jsonOutput');
+		const currentItemJson = document.getElementById('currentItemJson');
+		const jsonEditor = document.getElementById('jsonEditor');
+
+		try
+		{
+			// 更新所有物品JSON
+			const jsonString = JSON.stringify(items, null, 2);
+			jsonOutput.value = jsonString;
+
+			// 更新当前物品JSON
+			if(currentItemIndex >= 0 && currentItemIndex < items.length)
+			{
+				currentItemJson.value = JSON.stringify(items[currentItemIndex], null, 2);
+			}
+			else
+			{
+				currentItemJson.value = '暂无选中物品';
+			}
+
+			// 如果编辑器没有焦点，也更新编辑器内容
+			if(document.activeElement !== jsonEditor)
+			{
+				jsonEditor.value = jsonString;
+			}
+		} catch (e)
+		{
+			console.error('生成JSON失败:', e);
 		}
 	}
 
