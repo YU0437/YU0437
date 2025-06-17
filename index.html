@@ -1130,6 +1130,8 @@
 	const effectFieldsPool = {
 		// 数值类参数
 		statRatio: {type: 'number', label: '增加比例', step: 0.01, value: 0.1, min: -10, max: 10},
+		addDamage: {type: 'number', label: '增加伤害', step: 5, value: 5},
+		destroy: {type: 'number', label: '损坏几率', step: 0.01, value: 0.1, min: -10, max: 10},
 		ownerRatio: {type: 'number', label: '持有属性转换比例', step: 0.01, value: 0.1, min: -10, max: 10},
 		otherStatRatio: {type: 'number', label: '转换属性比例', step: 0.01, value: 0.1, min: -10, max: 10},
 		statLimitRatio: {type: 'number', label: '突破上限比例', step: 0.01, value: 0.1, min: 0, max: 10},
@@ -1138,6 +1140,10 @@
 		bulletPenetrate: {type: 'number', label: '穿透次数', step: 1, value: 1, min: 0, max: 10},
 		baseDamage: {type: 'number', label: '基础伤害', step: 1, value: 10, min: 0},
 		attackAmount: {type: 'number', label: '攻击目标数', step: 1, value: 1, min: 1, max: 10},
+		threshold: {type: 'number', label: '条件阈值', step: '0.1', value: 0.1},
+		value: {type: 'number', label: '数值', step: '0.1', value: 0.1},
+		xSecond: {type: 'number', label: '秒', step: '0.1', value: 0.1},
+		xSecondCount: {type: 'number', label: '次数', step: '1', value: 1},
 
 		// 属性选择类
 		stat: {
@@ -1156,7 +1162,9 @@
 				{value: 'Lucky', text: '幸运值'},
 				{value: 'Dodge', text: '闪避率'},
 				{value: 'CloseDamage', text: '近战伤害'},
-				{value: 'RemoteDamage', text: '远程伤害'}
+				{value: 'RemoteDamage', text: '远程伤害'},
+				{value: 'Range', text: '攻击范围'},
+				{value: 'PickRange', text: '拾取范围'},
 			]
 		},
 		addStat: {
@@ -1176,6 +1184,8 @@
 				{value: 'Dodge', text: '闪避率'},
 				{value: 'CloseDamage', text: '近战伤害'},
 				{value: 'RemoteDamage', text: '远程伤害'},
+				{value: 'Range', text: '攻击范围'},
+				{value: 'PickRange', text: '拾取范围'},
 				{value: 'TmpAck', text: '临时攻击力'},
 				{value: 'TmpDef', text: '临时防御力'},
 				{value: 'TmpSpeed', text: '临时移动速度'}
@@ -1198,6 +1208,8 @@
 				{value: 'Dodge', text: '闪避率'},
 				{value: 'CloseDamage', text: '近战伤害'},
 				{value: 'RemoteDamage', text: '远程伤害'},
+				{value: 'Range', text: '攻击范围'},
+				{value: 'PickRange', text: '拾取范围'},
 			]
 		},
 		otherAddStat: {
@@ -1217,6 +1229,8 @@
 				{value: 'Dodge', text: '闪避率'},
 				{value: 'CloseDamage', text: '近战伤害'},
 				{value: 'RemoteDamage', text: '远程伤害'},
+				{value: 'Range', text: '攻击范围'},
+				{value: 'PickRange', text: '拾取范围'},
 			]
 		},
 		addGameStat: {
@@ -1241,7 +1255,8 @@
 			options: [
 				{value: 'Common', text: '普通'},
 				{value: 'Explode', text: '爆炸'},
-				{value: 'Pierce', text: '穿透'}
+				{value: 'Pierce', text: '穿透'},
+				{value: 'Material', text: '材料'},
 			]
 		},
 		operation: {
@@ -1269,30 +1284,7 @@
 				{value: 'false', text: '>'}
 			]
 		},
-		threshold: {
-			type: 'number',
-			label: '条件阈值',
-			step: '0.1',
-			value: 0.1
-		},
-		value: {
-			type: 'number',
-			label: '数值',
-			step: '0.1',
-			value: 0.1
-		},
-		xSecond: {
-			type: 'number',
-			label: '秒',
-			step: '0.1',
-			value: 0.1
-		},
-		xSecondCount: {
-			type: 'number',
-			label: '次数',
-			step: '1',
-			value: 1
-		},
+
 		bulletBehaviors: {
 			type: 'nested',
 			label: '子弹行为',
@@ -1306,7 +1298,9 @@
 						{value: 'Freezing', text: '冰冻'},
 						{value: 'Burn', text: '燃烧'},
 						{value: 'Poison', text: '中毒'},
-						{value: 'Bleed', text: '流血'}
+						{value: 'Bleed', text: '流血'},
+						{value: 'MaterialHitBehavior', text: '金钱镖专属,必须选择子弹移动行为'},
+						{value: 'MoveBehavior', text: '基础的子弹移动,非必要无需选择'}
 					]
 				},
 				{
@@ -1328,14 +1322,14 @@
 					type: 'number',
 					label: '每层效果值',
 					param: 'valuePerStack',
-					step: 0.1,
+					step: 1,
 					value: 1
 				},
 				{
 					type: 'number',
 					label: '持续时间(秒)',
 					param: 'durationPerStack',
-					step: 0.1,
+					step: 1,
 					value: 1
 				}
 			]
@@ -1345,6 +1339,8 @@
 			label: '触发类型',
 			options: [
 				{value: 'OnWaveStart', text: '波次开始时'},
+				{value: 'OnAttack', text: '当攻击时'},
+				{value: 'OnHitEnemy', text: '当命中时'},
 				{value: 'OnWaveEnd', text: '波次结束时'},
 				{value: 'OnHit', text: '受伤时'},
 				{value: 'OnKill', text: '击杀敌人时'},
@@ -1357,6 +1353,7 @@
 				{value: 'OnSpeedChange', text: '移速变化时'},
 				{value: 'OnShopApply', text: '购买时生效'},
 				{value: 'OnStatChange', text: '属性变化时'},
+				{value: 'OnHitEnemy', text: '命中敌人时'},
 			]
 		}
 	};
@@ -1405,9 +1402,11 @@
 				SecondHpRecover: {required: ['recover', 'xSecond']},
 				SecondHurt: {required: ['baseDamage', 'xSecond']},
 				FreeFlushCount: {required: ['xSecondCount']},
+				StatAmplifier: {required: ['stat', 'statRatio', 'operation']},
+				StatLock: {required: ['stat']},
 				BulletLaunch: {required: ['xSecondCount']},
 				SecondPackedScene: {
-					required: ['xSecond', 'addStat', 'statRatio', 'triggerChance', 'bulletCounts'],
+					required: ['xSecond', 'bulletType', 'addStat', 'statRatio', 'triggerChance', 'bulletCounts'],
 					optional: ['bulletBehaviors']
 				},
 				SecondTmpChange: {required: ['addStat', 'statRatio', 'triggerChance']},
@@ -1418,7 +1417,11 @@
 				WaveFreeFlush: {required: []},
 				WaveTemporary: {required: ['addStat', 'statRatio']},
 				StatLimitChange: {required: ['statLimit', 'statLimitRatio']},
-				StatChangeOther: {required: ['ownerStat', 'ownerRatio', 'otherAddStat', 'otherStatRatio']}
+				StatChangeOther: {required: ['ownerStat', 'ownerRatio', 'otherAddStat', 'otherStatRatio']},
+				AttackMaterial: {required: ['triggerChance', 'bulletCounts', 'destroy', 'bulletPenetrate', 'bulletBehaviors']},
+				HitAddDamage: {required: ['baseDamage', 'addDamage']},
+				ReCallWave: {required: ['xSecondCount']},
+				MaterialChange: {required: ['xSecondCount', 'statRatio']}
 			}
 		}
 	};
@@ -1480,9 +1483,19 @@
 			{value: 'StatLimitChange', text: '属性上限突破'},
 			{value: 'FreeFlushCount', text: '获得x次免费刷新'},
 			{value: 'BulletLaunch', text: '获得x次子弹弹射'},
+			{value: 'ReCallWave', text: '回溯到x波次'},
+			{value: 'MaterialChange', text: '材料增减'},
+			{value: 'StatAmplifier', text: '属性的最终修改'},
+			{value: 'StatLock', text: '属性锁定'},
 		],
 		'OnStatChange': [
 			{value: 'StatChangeOther', text: '属性转换'},
+		],
+		'OnAttack': [
+			{value: 'AttackMaterial', text: '金钱镖'},
+		],
+		'OnHitEnemy': [
+			{value: 'HitAddDamage', text: '连击增加伤害'},
 		]
 	};
 
@@ -2303,10 +2316,7 @@
                         </div>
                     </div>
                     <div class="effect-description mt-2">
-                        <div>属性: ${getStatName(effect.stat)}</div>
-                        <div>值: ${effect.value}</div>
-                        <div>操作: ${effect.operation === 'add' ? '+' : effect.operation === 'subtract' ? '-' : effect.operation === 'multiply' ? '*' : effect.operation}</div>
-                    </div>
+                        <div>${getStatName(effect.stat)}${effect.operation === 'add' ? '+' : effect.operation === 'subtract' ? '-' : effect.operation === 'multiply' ? '*' : effect.operation}${effect.value}</div>
                 `;
 			}
 			else if(effect.effect === 'Triggered')
@@ -2332,17 +2342,18 @@
                     <div>效果:
     <span class="effect-description">
         <!-- 触发条件  当什么时候-->
-        ${eventName && (effect.type !== 'SecondHurt' && effect.type !== 'ThresholdHpAddStat' && effect.type !==
+        ${eventName && (effect.specialEventTypes !== 'OnSecond' && effect.type !== 'ThresholdHpAddStat' &&
+						effect.type !==
 						'StatChangeOther') ? `${eventName}` : ''}
-
-        <!-- 概率    有多少概率,如果不需要概率择不显示-->
-        ${effect.triggerChance ? `，${effect.triggerChance}%概率` : ''}
-        <!-- 特殊处理效果  -->
+   <!-- 特殊处理 当什么时候 -->
         ${effect.specialEventTypes === 'OnSecond' && effect.xSecond ?
 						`每${effect.xSecond}秒` : ''}
+        <!-- 概率    有多少概率,如果不需要概率择不显示-->
+        ${effect.triggerChance ? `，有${effect.triggerChance}%概率` : ''}
 
-        <!-- 效果数值 造成多少多少效果或者什么效果 -->
-        ${effect.statRatio !== undefined && effect.type !== 'ThresholdHpAddStat' && effect.type !== 'StatChangeOther' && !effect.bulletType ?
+        <!-- 效果数值 造成多少效果或者什么效果 -->
+        ${effect.statRatio !== undefined && effect.type !== 'ThresholdHpAddStat' && effect.type !== 'StatChangeOther' && effect.type !== 'MaterialChange'
+				&& effect.bulletType === undefined ?
 						`，${effect.statRatio > 0 ? '+' : ''}${effect.statRatio}% ${getStatName(effect.stat)}` : ''}
 
         <!-- 特殊效果描述  特殊的效果放在这里-->
@@ -2357,16 +2368,25 @@
 						0 ? '+' : ''}${effect.otherStatRatio}%${effect.otherAddStat}` :
 						''}
         ${effect.type === 'SecondHurt' ? `，受到 ${effect.baseDamage || 0}点伤害` : ''}
-        ${effect.type === 'HitExplode' ? `，发射${effect.bulletCounts || 1}枚${effect.bulletType}子弹` : ''}
-        ${effect.type === 'KillPackedScene' ? `，发射${effect.bulletCounts || 1}枚${effect.bulletType}子弹` : ''}
         ${effect.type === 'WaveFreeFlush' ? `每回合获得一次免费刷新` : ''}
         ${effect.type === 'BulletLaunch' ? `子弹弹射+${effect.xSecond}` : ''}
         ${effect.type === 'FreeFlushCount' ? `获得${effect.xSecond}次刷新` : ''}
         ${effect.type === 'KillPickMaterial' ? `吸收掉落物` : ''}
+        ${effect.type === 'CriticalHpRecover' ? `回复1点生命` : ''}
+        ${effect.type === 'ReCallWave' ? `回溯到第${effect.xSecondCount}波` : ''}
+        ${effect.type === 'HitAddDamage' ? `攻击敌人时造成${effect.baseDamage}点伤害,,敌人每受到此伤害一次,就会使伤害增加${effect.statRatio}` : ''}
+        ${effect.type === 'MaterialChange' ?
+						`${effect.xSecondCount === 0 ? '' : `在${effect.xSecondCount}回合后`} ${effect.statRatio > 0 ? '+'
+								: ''}${effect.statRatio}%当前材料` : ''}
 
         <!-- 子弹伤害详情  如果效果存在生成子弹,择生成子弹描述-->
+        ${effect.bulletType && effect.bulletType !== 'Explode' ?
+						`，生成${effect.bulletCounts || 1}枚${effect.bulletType}子弹` : ''}
+		${effect.bulletType && effect.bulletType === 'Explode' ?
+						`，产生爆炸` : ''}
         ${effect.bulletType ?
-						` (基础伤害: ${effect.baseDamage || 0}${effect.addStat ? ` + ${effect.statRatio > 0 ? '+' : ''}${effect.statRatio}% ${getStatName(effect.stat)}` : ''})` : ''}
+						`造成 (${effect.baseDamage || ''}${effect.addStat ?
+								` ${effect.statRatio > 0 ? '+' : ''}${effect.statRatio}% ${getStatName(effect.stat)}` : ''})` : ''}
     </span>
 </div>
                 `;
@@ -2437,7 +2457,8 @@
 			'OnHalfHealth': '半血时',
 			'OnSpeedChange': '移速变化时',
 			'OnShopApply': '购买时生效',
-			'OnStatChange': '属性变化时'
+			'OnStatChange': '属性变化时',
+			'OnAttack': '攻击时'
 		};
 		return eventNames[eventType] || eventType;
 	}
@@ -2673,10 +2694,13 @@
 		// 中文 → 英文的映射表
 		const chineseToEnglishMap = {
 			"属性名称": "stat",
+			"属性的修改": "statAmplifier",
 			"数值": "value",
 			"操作类型": "operation",
 			"需要增加的属性": "addStat",
 			"增加比例": "statRatio",
+			"增加伤害": "statRatio",
+			"损坏几率": "statRatio",
 			"持有属性转换比例": "ownerRatio",
 			"转换属性比例": "otherStatRatio",
 			"突破上限比例": "statLimitRatio",
@@ -2865,27 +2889,6 @@
 		showToast('效果模板已应用', 'success');
 	}
 
-	// 更新JSON预览
-	function updateJsonPreview()
-	{
-		const jsonOutput = document.getElementById('jsonOutput');
-		const jsonEditor = document.getElementById('jsonEditor');
-
-		try
-		{
-			const jsonString = JSON.stringify(items, null, 2);
-			jsonOutput.value = jsonString;
-
-			// 如果编辑器没有焦点，也更新编辑器内容
-			if(document.activeElement !== jsonEditor)
-			{
-				jsonEditor.value = jsonString;
-			}
-		} catch (e)
-		{
-			console.error('生成JSON失败:', e);
-		}
-	}
 
 	// 复制JSON到剪贴板
 	function copyJsonToClipboard()
